@@ -1,0 +1,587 @@
+---
+title: "Clustering"
+author: "Fabienne van Kleef"
+date: "2023-11-09"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I used this dataset from kaggle: https://www.kaggle.com/code/pratik1120/penguin-dataset-eda-classification-and-clustering
+
+## Research Question
+
+"What are the groupings of morphological measurements in penguins by sex? Do unsupervised clusters based on bill and flipper dimensions match the known sex labels?"
+
+Dependent Variable: Number of unsupervised clusters
+(No true dependent variable since clustering is unsupervised)
+
+Independent Variables:
+culmen_length_mm (numeric, continuous): Culmen bill length
+culmen_depth_mm (numeric, continuous): Culmen bill depth
+flipper_length_mm (numeric, continuous): Flipper length
+body_mass_g (numeric, continuous): Body mass
+sex (categorical): Penguin sex (Female, Male)
+
+The goal is to see if mathematical clustering based solely on the morphological measurements is able to recover the known biological groups of females and males.
+
+I have used Claude to aid the production 
+
+## Load Packages
+```{r}
+# General packges
+library(tidyverse); library(ggplot2); library(dplyr)
+# Clustering packages
+library(factoextra); library(cluster); library(NbClust); library(aricode);
+```
+
+## Load Data & Data Wrangling
+```{r}
+# Read in data
+penguins <- read.csv("/Users/fab/Downloads/clustering/penguins.csv")
+
+```
+
+## Read in Data/Variables of Interest
+
+```{r}
+# Select variables of interest 
+penguins_select <- penguins %>%
+  select(
+    culmen_length_mm,
+    culmen_depth_mm, 
+    flipper_length_mm,
+    body_mass_g
+  )
+
+# Remove missing values
+penguins_complete <- na.omit(penguins_select)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+## Data Wrangling
+
+
+```{r}
+
+# Numeric columns to summarize
+num_cols <- c("culmen_length_mm", "culmen_depth_mm", "flipper_length_mm", "body_mass_g")
+
+# Summary statistics
+summary(penguins[num_cols])
+
+# Means by sex
+penguins %>%
+  group_by(sex) %>%
+  summarise_each(funs(mean), num_cols)
+
+# Histograms
+penguins %>%
+  gather(key = "variable", value = "value", -sex) %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~variable, scales = "free")
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+ 
+
+```{r}
+# Select numeric columns
+penguin_numeric <- penguins %>%
+  select(culmen_length_mm, culmen_depth_mm, flipper_length_mm, body_mass_g)
+
+# Remove row names 
+row.names(penguin_numeric) <- NULL
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+
+## Perform K-means 
+
+```{r}
+# Select numeric columns
+penguin_data <- penguins %>%
+  select(culmen_length_mm, culmen_depth_mm, flipper_length_mm, body_mass_g)
+
+# Check for missing values and remove rows with any NAs
+penguin_data <- na.omit(penguin_data)
+
+# Check for and remove rows with NaN or Inf values
+penguin_data <- penguin_data %>%
+  filter_all(all_vars(!is.nan(.))) %>%
+  filter_all(all_vars(!is.infinite(.)))
+
+# K-means with 3 clusters, after ensuring data is clean
+penguin_km <- kmeans(
+  x = penguin_data, 
+  centers = 3,
+  iter.max = 10,
+  nstart = 25
+)
+
+# Within-cluster sum of squares 
+penguin_km$withinss
+
+# Variance explained
+penguin_km$betweenss / 
+  penguin_km$totss
+
+# Check cluster sizes
+table(penguin_km$cluster)
+
+# Cluster centroids
+round(penguin_km$centers, 1)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+So first we look at the within sum of squares. The values are [7011233 30995418 14090005] for the 3 clusters.
+Lower values indicate more compact, cohesive clusters.Cluster 1 has the lowest within-SS, cluster 2 has highest.
+
+Next let's look at the variance.The 0.7851417 Indicates that 78.51% of the variance in the data is explained by the clustering. The high value means clusters capture most of the variation
+
+The clusters have sizes of 70, 107 and 165  observations. The clusters are not balanced. Cluster 3 is the largest and cluster 1 is the smallest. 
+
+Now, the Cluster centroids. They capture the mean of each variable within each cluster
+Cluster 1 has the largest culmen_length length and mass, but shortest culmen depth. 
+Cluster 2 has the largest flipper length, but largest mass. 
+Cluster 3 has the smalles culmen length but largest culmen depth. It also has the smallest flipper length 
+
+I have used Claude to aid the production 
+
+## Visualize 
+
+```{r}
+# Clean the data before clustering
+penguins_clean <- penguins %>%
+  select(culmen_length_mm, culmen_depth_mm, flipper_length_mm, body_mass_g) %>%
+  na.omit() %>%
+  filter_all(all_vars(!is.infinite(.))) %>%
+  # Remove outliers based on IQR
+  filter(if_all(everything(), ~. > quantile(., probs = 0.25) - 1.5 * IQR(.) &
+                . < quantile(., probs = 0.75) + 1.5 * IQR(.)))
+
+# Perform k-means clustering on the cleaned data
+penguin_km <- kmeans(penguins_clean, centers = 3)
+
+# Now visualize clusters with the cleaned data
+fviz_cluster(object = penguin_km, data = penguins_clean)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The visualization shows the clusters capture distinct groupings of penguins based on the size-related variables. The clusters have clear interpretation as small, medium, and large penguins.Cluster 1 (green) has positive PC1, negative PC2 -> larger penguins
+Cluster 2 (blue) has negative PC1, positive PC2 -> smaller penguins
+Cluster 3 (red) falls in between clusters 1 and 2
+
+I have used Claude to aid the production 
+
+## Ground Truth
+
+
+```{r}
+
+# Perform k-means clustering on the cleaned data
+penguin_km <- kmeans(penguins_clean, centers = 3)
+
+# Add cluster assignments to the cleaned data for visualization
+plot_data <- penguins_clean
+plot_data$cluster <- penguin_km$cluster 
+
+# Visualize the clusters
+fviz_cluster(
+  object = penguin_km,
+  data = plot_data,
+  show.clust.cent = FALSE
+)
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+While we can't definitively match clusters to sex  without the true labels, the visual separation indicates the K-means clustering broadly captured the biological groups based on the morphological measurements.
+Cluster 1 (green) seems to be the largest penguins, likely the males. Cluster 2 (blue) looks like the smallest penguins, likely the females species. Cluster 3 (red) falls in the middle, which could be both. There is some mixing of clusters, not a perfect separation. This could mean that a third cluster is unnecessary as there is only two sexes when it comes to penguins, we could assume that two clusters is enough.
+
+I have used Claude to aid the production 
+
+
+## Elbow Method 
+
+```{r}
+# Elbow method with cleaned data
+within_sums <- sapply(
+  1:15, 
+  FUN=function(centers) {
+    # K-means for each k
+    km <- kmeans(penguins_clean, centers = centers, nstart = 25)
+    
+    # Extract total within-cluster sum of squares
+    km$tot.withinss
+  }
+)
+
+# Print within-cluster sum of squares values 
+within_sums
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The within_sums vector contains the total within-cluster sum of squares (wss) from running k-means with k = 1 to 15 clusters on the penguins data. The values decrease as the number of clusters (k) increases. This is expected - more clusters will always reduce wss.The decrease from k=1 to k=2 is very large . This implies 2 clusters better capture structure vs 1 cluster.
+The decrease starts to slow down and plateau around k=4-6 clusters. The marginal decrease gets smaller. An "elbow" appears around k=2-3. After this point, wss decreases slowly.The elbow suggests k=2 or k=3 clusters provides a good tradeoff between model complexity and capturing variance.Wss will continue decreasing, but additional clusters explain diminishing additional variance.
+
+I have used Claude to aid the production 
+
+```{r}
+
+# Elbow method
+fviz_nbclust(penguins_clean, # data
+             kmeans, # cluster algorithm
+             method = "wss", # wss for elbow method
+             k.max = 15, # max number of clusters
+             iter.max = 10, # max iterations for kmeans
+             nstart = 25) # number of random starts
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+Analysis: Elbow method = 2 clusters 
+
+## Silhouette Method 
+
+```{r}
+
+# Silhouette method 
+silhouettes <- sapply(
+  2:15, 
+  FUN= function(k){
+
+  # K-means with k clusters
+  km <- kmeans(penguins_clean, centers = k, nstart = 25, iter.max=10)
+  
+  # Silhouette widths
+  sil_widths <- silhouette(
+    km$cluster,
+    dist(penguins_clean))
+  
+  # Mean silhouette width
+  mean(sil_widths[,3], na.rm=TRUE)
+  
+})
+
+# Print silhouette values
+silhouettes
+
+
+# Silhouette plot
+fviz_nbclust(x=penguins_clean, 
+             FUNcluster = kmeans,
+             method = "silhouette",
+             k.max = 15,
+             iter.max = 10,
+             nstart = 25)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The silhouettes vector contains the mean silhouette widths for k-means clustering with k clusters on the penguins data.
+Silhouette widths range from -1 to 1. Higher values indicate better defined clusters.The values are all greater than 0.5 indicating reasonable cluster structure.There is an drop from k=1 to k=2 clusters. k=1 has the highest silhouette width.The values are relatively stable in the 0.52 to 0.57 range for k=3 to k=15.There is no clear "peak" silhouette value indicating an obvious optimal k.Based on the highest mean silhouette, k=2 clusters appears best with the tightest grouping.But k=1 or k=3 may also be reasonable given the overall stability.The higher silhouette for 2 clusters suggests it finds the most defined groups. But there is no sharp drop off indicating additional clusters are bad. So k=1-3 seem reasonable choices based on the silhouette widths.
+Analysis: Silhoutte Method = 2 clusters 
+
+I have used Claude to aid the production 
+
+## Gap Statistic 
+
+```{r}
+# Gap Statistic 
+##Set seed 
+set.seed(1234)
+
+## Perform bootstrap
+penguin_km<-clusGap(x=penguins_clean, 
+             FUNcluster = kmeans,
+             iter.max = 10,
+             nstart = 25,
+             K.max=15,
+             B=100
+)
+fviz_gap_stat(penguin_km)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The peak is at k=1, suggesting 1 or 2 clusters are optimal.There is a steep drop off after k=2, indicating diminishing returns for additional clusters. The shape shows a clear "elbow" at k=2, as the gap statistic decreases substantially after.
+
+I have used Claude to aid the production 
+
+Analysis: Gap Statistics = 1 or 2 clusters 
+
+
+Let's try two clusters 
+```{r}
+set.seed(123)
+
+# K-means with 2 clusters
+penguin_km <- kmeans(x= penguins_clean, centers = 2,iter.max = 10, nstart = 25)
+
+# Within cluster sum of squares
+penguin_km$withinss 
+
+# Variance explained
+penguin_km$betweenss / 
+  penguin_km$totss
+
+# K-means with 2 centers 
+penguin_km <- kmeans(penguins_clean, centers = 2)
+
+# Check cluster sizes
+table(penguin_km$cluster)
+
+# View centroids
+round(penguin_km$centers, 1)
+
+# Visualize clusters
+fviz_cluster(object = penguin_km,
+             data = penguins_clean)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+What is interesting to note here is that some data points appear to fit better into the red rather than the blue cluster. There is several reasons why this could have happened. K-means produces spherical clusters, while the true groups may have different shapes. This can put some points in a cluster they don't fully match.There is overlap between the groups on these variables. For example, some smaller penguins may be similar to larger ones. Hard boundaries may not perfectly separate them.
+
+I will not create only one cluster as 1 cluster may minimize within-cluster variance mathematically, it does not provide any useful segmentation or actionable insights in practice.
+
+I have used Claude to aid the production 
+
+```{r}
+# Hierarchical clustering
+penguin_hclust <- agnes(penguins_clean, 
+                        metric = "euclidean",
+                        method = "complete")
+plot(penguin_hclust, which.plots=2)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The y-axis shows the linkage distance between clusters. Higher values mean clusters were joined later, so they are more dissimilar.Leaves lower down joined into clusters first, indicating more similarity.
+Clusters higher up joined late, so they are more distinct groups.The long vertical lines indicate more distinct clusters based on the distance.Short lines mean clusters were fused early due to similarity.There seem to be 2-3 main distinct clusters shown by the long vertical lines.Multiple small clusters were joined early indicating similarity.Larger clusters merged late indicating dissimilarity.Cutting the tree at different heights could produce different numbers of clusters.
+
+I have used Claude to aid the production 
+
+## Agglomerative Coefficient 
+
+```{r}
+# Methods to test
+methods <- c("average", "single", "complete", "ward")
+
+# Calculate agglomerative coefficients
+sapply(
+  X=methods, 
+  function(method) {
+  
+  # Clustering with method
+  clust <- agnes(x=penguins_clean,
+                 metric = "euclidean",
+                 method=method)
+  
+  # Extract agglomerative coefficient
+  clust$ac
+  
+})
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The agglomerative coefficient (AC) measures how clustered the hierarchical clustering dendrogram is, on a scale of 0 to 1. Values closer to 1 indicate more clustering structure.The agglomerative coefficient (AC) measures how clustered the hierarchical clustering dendrogram is, on a scale of 0 to 1. Values closer to 1 indicate more clustering structure.Complete linkage also has a high AC of 0.997, showing strong clustering.Average linkage has an AC of 0.993, still reasonably high.Single linkage has the lowest AC of 0.954, suggesting it detects less clustered structure.All methods have AC > 0.95, indicating overall the data can be well clustered.Ward and complete show the most clustering structure, while single linkage shows relatively less.
+
+I have used Claude to aid the production 
+
+## Ward's Method 
+
+```{r}
+# Ward's method 
+penguin_ward <- agnes(
+  x=penguins_clean,
+  metric= "euclidean",
+  method = "ward")
+
+# Plot dendrogram
+plot(penguin_ward, which.plots = 2)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+The y-axis measures dissimilarity between clusters. Ward's shows clear separation into 2-3 distinct groups
+Small subgroups exist within the main clusters. Larger clusters are quite dissimilar and join late.
+
+I have used Claude to aid the production 
+
+## Cutting the Dendogram 
+
+```{r}
+# Perform hierarchical clustering with the clean dataset
+penguin_hc <- agnes(penguins_clean, method = "complete")
+
+# Cut at 2 clusters
+penguin_clusters2 <- cutree(penguin_hc, k = 2)
+
+# Cut at 4 clusters
+penguin_clusters4 <- cutree(penguin_hc, k = 4)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+
+## Two Clusters / Four Clusters 
+
+```{r}
+# Cut at 2 clusters
+penguin_clusters2 <- cutree(penguin_hc, k = 2)
+
+# Cut at 4 clusters
+penguin_clusters4 <- cutree(penguin_hc, k = 4)
+
+# Visualize 2 clusters
+fviz_cluster(
+  list(
+    data = penguins_clean,
+    cluster = penguin_clusters2
+  )  
+)
+
+# Visualize 4 clusters
+fviz_cluster(
+  list(
+    data = penguins_clean,
+    cluster = penguin_clusters4
+  )  
+)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+2 Clusters
+There is one large and one small cluster based on the points. The large cluster has positive PC1, negative PC2 (larger penguins). Small cluster has negative PC1, positive PC2 (smaller penguins). Cutting at 2 clusters captures the overall size differentiation. 
+
+4 Clusters
+Now there are 4 distinct visually separated clusters. Greater distinction between the input variables. Potentially splits the original red/blue into sub-groups. May let us examine more nuanced penguin groupings. But more complex and harder to directly interpret. 
+
+I have used Claude to aid the production 
+
+## Elbow plot 
+
+```{r}
+# Elbow plot
+fviz_nbclust(penguins_clean, 
+             FUNcluster = hcut,
+             method = "wss")
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+
+Analysis: 2 clusters 
+
+## Silhouette plot 
+
+```{r}
+# Silhouette plot
+fviz_nbclust(penguins_clean,  
+             FUNcluster = hcut,
+             hc_method = "ward.D", 
+             method = "silhouette")
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+Analysis: 2 clusters 
+
+## Gap Statistic 
+
+```{r}
+# Define hclust_clusters function
+hclust_clusters <- function(data, k){
+  hc <- hclust(dist(data), method="ward.D")
+  clusters <- cutree(hc, k)
+  list(cluster = clusters)
+}
+
+# Usage with the clean dataset
+clusters <- hclust_clusters(penguins_clean, 3)
+
+# Gap statistic with the clean dataset
+penguin_gap <- clusGap(x = penguins_clean, 
+                       FUNcluster = hclust_clusters,
+                       K.max = 10, 
+                       B = 100)  
+
+# Plot gap statistic
+fviz_gap_stat(penguin_gap)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The peak is at k=1, suggesting 1 or 2 clusters are optimal.There is a steep drop off after k=2, indicating diminishing returns for additional clusters. The shape shows a clear "elbow" at k=2, as the gap statistic decreases substantially after.
+
+I have used Claude to aid the production 
+
+Analysis: Gap Statistics = 1 or 2 clusters 
+
+
+ARI & AMI
+```{r}
+library(mclust) # For ARI and AMI calculations
+library(dplyr)
+
+# Complete cases 
+penguins_complete <- penguins[complete.cases(penguins),]
+
+# Hierarchical clustering
+penguin_hc <- hclust(dist(penguins_complete[,1:4]))
+
+# Cut into 2 clusters
+penguin_clusters <- cutree(penguin_hc, 2)
+
+# Setup for comparison
+original <- penguins_complete$sex
+original_num <- as.numeric(factor(original))
+clusters_num <- as.numeric(penguin_clusters)
+
+# Compare with ARI
+ARI(original_num, clusters_num)
+
+# Compare with AMI 
+AMI(original_num, clusters_num)
+
+#I have used ChatGPT  to aid the production of the code used in this problem.
+#I have used Claude to aid the production of the code used in this problem.
+```
+The ARI and AMI values are both very close to 0 in this case:
+ARI = -0.000175
+AMI = -0.000127
+Values this close to 0 imply that there is no agreement between the hierarchical clustering and the known sex groups.
+
+ARI and AMI range from -1 to +1. Values near 0 indicate random/no agreement.The negative values here actually suggest worse than random (slight negative association).The clusters are not recovering any of the structure corresponding to sex.Sex does not seem to be a primary driver of morphological differences.The metrics suggest hierarchical clustering is not grouping penguins based on sex when looking only at the morphological measurements.In summary, the very low ARI and AMI indicate essentially no relationship between the hierarchical clusters and the known sex variable. The clusters are not aligning with sex in a meaningful way.
+
+I have used ChatGPT to aid the production 
+
+## Conclusion 
+
+This analysis aimed to determine if unsupervised hierarchical clustering based on morphological measurements could recover known sex groupings in the penguin dataset. Four size-related variables were used: culmen length, culmen depth, flipper length, and body mass. Ward's method was used for hierarchical clustering of the Euclidean distances between observations. The dendrogram was cut to create 2 clusters for comparison against the female and male labels.
+
+The clusters showed poor agreement with the known sex groups, with extremely low ARI and AMI values near zero. This suggests sex is not a primary driver of the morphological differences observed in this dataset. The size-based measurements used appear insufficient to differentiate male and female penguins in an unsupervised manner. Additional physiological or behavioral data may be needed to recover sex clusters.
+
+In summary, the unsupervised clustering based solely on bill and flipper dimensions was unable to recapitulate the known sex labels in this penguin data. This implies that morphological size is not strongly associated with sex in penguins. More data modalities are likely needed for clustering to identify sex-related groupings without supervision.
+
+I have used ChatGPT to aid the production
+
